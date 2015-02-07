@@ -9,15 +9,15 @@ app.get('/', function (req, res) {
   if (req.query.ip && req.query.user_agent && req.query.referer)
   {
   	console.log('[OK]'.green + ' all parameters are set for a query. Evaluating.')
-  	res.status(204).send('Not Fraud')
+  	if (evaluate) {
+  		res.status(204).send('Not Fraud')
+  	}
+  	else {
+  		res.status(403).send('Fraud')
+  	}
+
   } 
-  res.status(403).send('Fraud')
-
-})
-
-app.get('/train/', function (req,res) {
-	console.log('[STATUS]'.green + ' starting train')
-	res.status(200).send('<button formaction>Press me</button>')
+  
 })
 
 var server = app.listen(3000, function () {
