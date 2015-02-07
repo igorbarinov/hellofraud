@@ -55,10 +55,11 @@ app.get('/', function (req, res) {
   	console.log('[OK]'.green + ' all parameters are set for a query. Evaluating.')
   	var classify =  classifier.classify([req.query.ip,req.query.user_agent, req.query.referer])
   	
-  	console.log(classify)
+  	//console.log(classify)
 
   	if (classify == "true") {
-  		console.log('[RESULT]'.green+ ' is not bot')
+  		console.log('[RESULT]'.green+ ' of IP: ' + req.query.ip +  ' is not bot')
+  		console.log(classifier.getClassifications([req.query.ip,req.query.user_agent, req.query.referer]))
   		res.status(200).send('Not Fraud')
   	}
   	else {
@@ -68,6 +69,9 @@ app.get('/', function (req, res) {
   	} 
 
   } 
+  else {
+  	res.status(200).send('Please specify params')
+  }
 
 })
 
