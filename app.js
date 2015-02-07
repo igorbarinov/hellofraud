@@ -2,8 +2,6 @@ var express = require('express')
 var colors = require('colors')
 var app = express()
 
-// TODO init
-
 
 
 var color = require('colors')
@@ -12,7 +10,7 @@ var natural = require('natural'),
 var fs = require('fs')
 // convert tsv to json
 
-var tsv = require("node-tsv-json")
+ var tsv = require("node-tsv-json")
   tsv({
     input: "train_data.tsv", 
     output: "output.json"
@@ -29,7 +27,7 @@ var tsv = require("node-tsv-json")
   var obj =  JSON.parse(fs.readFileSync('output.json', 'utf8'))
   // DEBUG console 
   // console.log(obj.length)
-  
+
   for (var i=0; i < obj.length/2; ++i){
   	classifier.addDocument([obj[i][0],obj[i][1],obj[i][2]],obj[i][3])
   }
@@ -48,23 +46,37 @@ app.get('/', function (req, res) {
  
   console.log('[QUERY]'.green+ ' ' + JSON.stringify(req.query))
 
-  console.log(obj[0][3] + ' ' + classifier.classify([obj[0][0],obj[0][1],obj[0][2]]));
-  classifier.addDocument([obj[0][0],obj[0][1],obj[0][2]],obj[0][3])
-  res.status(403).send('Fraud')
+ 
+ // classifier.addDocument([obj[0][0],obj[0][1],obj[0][2]],obj[0][3])
+
 
   if (req.query.ip && req.query.user_agent && req.query.referer)
   {
   	console.log('[OK]'.green + ' all parameters are set for a query. Evaluating.')
-  /*	if (evaluate) {
-  		res.status(204).send('Not Fraud')
+  	var classify =  classifier.classify([req.query.ip,req.query.user_agent, req.query.referer])
+  	
+  	console.log(classify)
+
+  	if (classify == "true") {
+  		console.log('[RESULT]'.green+ ' is not bot')
+  		res.status(200).send('Not Fraud')
   	}
   	else {
+  		console.log('im in else')
   		res.status(403).send('Fraud')
-  	} */
+  		console.log('[RESULT]'.green+ ' is bot')
+  	} 
 
   } 
 
 })
+
+app.get('/stats', function (req, res) {
+	//TODO show stats for session
+})
+
+
+
 
 var server = app.listen(3000, function () {
 
