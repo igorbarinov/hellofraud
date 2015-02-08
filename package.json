@@ -17,10 +17,10 @@
   },
   "homepage": "https://github.com/igorbarinov/hellofraud",
   "dependencies": {
+    "aerospike": "^1.0.27",
     "colors": "^1.0.3",
     "express": "^4.11.2",
     "natural": "^0.2.0",
-    "node-tsv-json": "^0.2.1",
-    "redis": "^0.12.1"
+    "node-tsv-json": "^0.2.1"
   }
 }
