@@ -145,6 +145,8 @@ console.log('[OK]'.green + " train complete.")
 
 app.get('/', function(req, res) {
 
+
+
     console.log('[QUERY]'.green + ' ' + JSON.stringify(req.query));
     incr_key(NUM_REQUESTS);
     if (req.query.ip && req.query.user_agent && req.query.referer) {
@@ -162,15 +164,47 @@ app.get('/', function(req, res) {
             console.log('[RESULT]'.green + ' is bot')
         }
 
-    } else {
+    } else if (req.query.ip && !req.query.user_agent && req.query.referer) {
+
       if (DEBUG){
         fs.appendFile('incomplete.tsv', req.query.ip+'\t'+req.query.user_agent+'\t'+req.query.referer+'\n', function (err){
           if (err) throw err;
           console.log(req.query.ip+'\t'+req.query.user_agent+'\t'+req.query.referer+'\n')
         })        
       }
+        incr_key(NUM_FRAUD);
         res.status(403).send('Incomplete request. You must specify ip, user_agent and referer in your request. Bye.')
     }
+   
+
+
+
+
+    else if (req.query.ip && req.query.user_agent && !req.query.referer) {
+      
+      var classify = classifier.classify([req.query.ip, req.query.user_agent,''])
+        console.log('[OK]'.green + ' ip and user_agent parameters are set for a query. Evaluating.')
+        
+
+        if (classify == "true") {
+            incr_key(NUM_NON_FRAUD);
+            console.log('[RESULT]'.green + ' of IP: ' + req.query.ip + ' is not bot')
+            console.log(classifier.getClassifications([req.query.ip, req.query.user_agent,'']))
+            res.status(204).send('Not Fraud')
+        } else {
+            incr_key(NUM_FRAUD);
+            res.status(403).send('Fraud')
+            console.log('[RESULT]'.green + ' is bot')
+            console.log(classifier.getClassifications([req.query.ip, req.query.user_agent,'']))
+        }
+
+
+    }
+
+
+
+
+
 
 })
 
