@@ -1,6 +1,8 @@
 var express = require('express');
 var colors = require('colors');
-
+var natural = require('natural'),
+    classifier = new natural.BayesClassifier()
+var fs = require('fs')
 var app = express();
 
 
@@ -9,11 +11,15 @@ if (process.env.NODE_ENV == "production") {    
     console.log = function() {};
 }
 
-/* Db setup
- */
-
 
 var db = "redis";
+var DEBUG = true;
+if (DEBUG) {
+  fs.writeFileSync('incomplete.tsv','')
+}
+
+/* Db setup
+ */
 var client;
 if (db === "aerospike") {
     var aerospike = require('aerospike');
@@ -111,11 +117,6 @@ set_key(NUM_FRAUD, 0);
 set_key(NUM_NON_FRAUD, 0);
 
 
-var color = require('colors')
-var natural = require('natural'),
-    classifier = new natural.BayesClassifier()
-var fs = require('fs')
-
 var tsv = require("node-tsv-json")
 tsv({
     input: "train_data.tsv",
@@ -150,8 +151,6 @@ app.get('/', function(req, res) {
         console.log('[OK]'.green + ' all parameters are set for a query. Evaluating.')
         var classify = classifier.classify([req.query.ip, req.query.user_agent, req.query.referer])
 
-        //console.log(classify)
-
         if (classify == "true") {
             incr_key(NUM_NON_FRAUD);
             console.log('[RESULT]'.green + ' of IP: ' + req.query.ip + ' is not bot')
@@ -164,7 +163,13 @@ app.get('/', function(req, res) {
         }
 
     } else {
-        res.status(200).send('Please specify params')
+      if (DEBUG){
+        fs.appendFile('incomplete.tsv', req.query.ip+'\t'+req.query.user_agent+'\t'+req.query.referer+'\n', function (err){
+          if (err) throw err;
+          console.log(req.query.ip+'\t'+req.query.user_agent+'\t'+req.query.referer+'\n')
+        })        
+      }
+        res.status(403).send('Incomplete request. You must specify ip, user_agent and referer in your request. Bye.')
     }
 
 })
