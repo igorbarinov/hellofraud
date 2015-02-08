@@ -77,7 +77,7 @@ app.get('/', function (req, res) {
 })
 
 app.get('/stats', function (req, res) {
-  //TODO show stats for session
+  res.status(200).send(stat);
 })
 
 
