@@ -1,15 +1,13 @@
-var express = require('express')
-var colors = require('colors')
-var app = express()
-
+var express = require('express');
+var async = require('async');
+var colors = require('colors');
 var aerospike = require('aerospike');
+var redis = require('redis');
+var app = express();
 var operator = aerospike.operator;
-var inc_op = operator.incr('val', 1);
 var aerostatus = aerospike.status;
-var client = aerospike.client({
-    hosts: [{addr: '192.241.207.138', port: 4000}]
-});
-
+/* Db setup
+ */
 function connect_cb( err, client) {
     if (err.code == aerostatus.AEROSPIKE_OK) {
         console.log("Aerospike Connection Success")
@@ -31,21 +29,95 @@ var aerocallback = function(err, rec, meta) {
     }
 }
 
-client.connect(connect_cb)
-//var NUM_REQUESTS = aerospike.key("test", "stats", "NUM_REQUESTS");
-//var NUM_FRAUD = aerospike.key("test", "stats", "NUM_FRAUD");
-//var NUM_NON_FRAUD = aerospike.key("test", "stats", "NUM_NON_FRAUD");
-//client.put(NUM_REQUESTS, {val: 0}, aerocallback);
-//client.put(NUM_FRAUD, {val: 0}, aerocallback);
-//client.put(NUM_NON_FRAUD, {val: 0}, aerocallback);
+var db = "redis";
+var client;
+if (db === "aerospike") {
+    client = aerospike.client({
+        hosts: [{addr: '192.241.207.138', port: 4000}]
+    });
+    client.connect(connect_cb)
+    client.put(MAIN_KEY, {
+        NUM_FRAUD: 0, NUM_NON_FRAUD: 0, NUM_REQUESTS: 0
+    }, aerocallback);
+} else if (db === "redis") {
+    client = redis.createClient();
+    client.on('connect', function() {console.log('connected');});
+}
+
+var MAIN_KEY = aerospike.key("test", "stats", "MAIN_KEY");
+function set_key(key_string, val) {
+    if (db === "aerospike") {
+        client.put(MAIN_KEY, {key_string: val}, function(err){
+            if ( err.code != aerospike.status.AEROSPIKE_OK ) {
+                console.log("error: %s", err.message);
+            }
+        });
+    } else if (db === "redis") {
+        client.set(key_string, val);
+    }
+}
+
+function incr_key(key_string) {
+    if (db === "aerospike") {
+        client.operate(
+            MAIN_KEY, [operator.incr(key_string, 1)], aerocallback);
+    } else if (db === "redis") {
+        client.incr(key_string);
+    }
+}
+
+var keygetter = {
+    output: null,
+    get_key: function(key_string, callback) {
+        var that = this;
+        var output;
+        if (db === "aerospike") {
+            client.select(MAIN_KEY, [key_string], function(err, rec, meta, key){
+                if (err.code == aerostatus.AEROSPIKE_OK) {
+                    console.log("Found record")
+                    that.output = rec[key_string];
+                } else {
+                    console.log(err);
+                }
+            });
+        } else if (db === "redis") {
+            client.get(key_string, function(err, reply) {
+                that.output = reply;
+            });
+        }
+        return that.output;
+    }
+}
+
+//function return_keys(key_strings, res, callback) {
+//    /* Takes a list of key strings and express-sends back the k/v pairs
+//     */
+//    console.log(key_strings);
+//    if (db === "aerospike") {
+//        client.select(MAIN_KEY, key_string, function(err, rec, meta, key){
+//            if (err.code == aerostatus.AEROSPIKE_OK) {
+//                console.log("Found record")
+//                res.status(200).send(rec);
+//            } else {
+//                console.log(err);
+//            }
+//        });
+//    } else if (db === "redis") {
+//        client.get(key_string, function(err, reply) {
+//            console.log(reply.length);
+//            return reply;
+//        });
+//    }
+//}
+
+/* End Db setup */
+
 var NUM_REQUESTS = "NUM_REQUESTS";
 var NUM_FRAUD = "NUM_FRAUD";
 var NUM_NON_FRAUD = "NUM_NON_FRAUD";
-ALL_BINS = [NUM_REQUESTS, NUM_NON_FRAUD, NUM_FRAUD];
-var MAIN_KEY = aerospike.key("test", "stats", "MAIN_KEY");
-client.put(MAIN_KEY, {
-    NUM_FRAUD: 0, NUM_NON_FRAUD: 0, NUM_REQUESTS: 0
-}, aerocallback);
+set_key(NUM_REQUESTS, 0);
+set_key(NUM_FRAUD, 0);
+set_key(NUM_NON_FRAUD, 0);
 
 
 var color = require('colors')
@@ -86,7 +158,7 @@ var tsv = require("node-tsv-json")
 app.get('/', function (req, res) {
  
   console.log('[QUERY]'.green+ ' ' + JSON.stringify(req.query));
-  client.operate(MAIN_KEY, [operator.incr(NUM_REQUESTS, 1)], aerocallback);
+  incr_key(NUM_REQUESTS);
   if (req.query.ip && req.query.user_agent && req.query.referer)
   {
     console.log('[OK]'.green + ' all parameters are set for a query. Evaluating.')
@@ -95,13 +167,13 @@ app.get('/', function (req, res) {
     //console.log(classify)
 
     if (classify == "true") {
-      client.operate(MAIN_KEY, [operator.incr(NUM_NON_FRAUD, 1)], aerocallback);
+      incr_key(NUM_NON_FRAUD);
       console.log('[RESULT]'.green+ ' of IP: ' + req.query.ip +  ' is not bot')
       console.log(classifier.getClassifications([req.query.ip,req.query.user_agent, req.query.referer]))
       res.status(204).send('Not Fraud')
     }
     else {
-      client.operate(MAIN_KEY, [operator.incr(NUM_FRAUD, 1)], aerocallback);
+      incr_key(NUM_FRAUD);
       res.status(403).send('Fraud')
       console.log('[RESULT]'.green+ ' is bot')
     }
@@ -113,15 +185,35 @@ app.get('/', function (req, res) {
 
 })
 
+function simple() {
+    return "a";
+}
+
 app.get('/stats', function (req, res) {
-  client.select(MAIN_KEY, ALL_BINS, function(err, rec, meta, key){
-    if (err.code == aerostatus.AEROSPIKE_OK) {
-        console.log("Found record")
-        res.status(200).send(rec);
-    } else {
-        console.log(err);
-    }
-  });
+    //ret_obj = {};
+    //ret_obj[NUM_FRAUD] = get_key(NUM_FRAUD);
+    //ret_obj[NUM_NON_FRAUD] = get_key(NUM_NON_FRAUD);
+    //ret_obj[NUM_REQUESTS] = get_key(NUM_REQUESTS);
+    //console.log(ret_obj);
+    async.series([
+        function(cb) { 
+            num_fraud = keygetter.get_key(NUM_FRAUD);
+            console.log(num_fraud);
+            cb(null, num_fraud);
+        },
+        function(cb) { 
+            num_non_fraud = keygetter.get_key(NUM_NON_FRAUD)
+            console.log(num_non_fraud);
+            cb(null, num_non_fraud);
+        },
+        function(cb) { 
+            num_requests = keygetter.get_key(NUM_REQUESTS)
+            console.log(num_non_fraud);
+            cb(null, num_requests);
+        }
+    ], function(err, results) {
+        console.log(results);
+    });
 })
 
 
