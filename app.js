@@ -6,6 +6,13 @@ var redis = require('redis');
 var app = express();
 var operator = aerospike.operator;
 var aerostatus = aerospike.status;
+
+// Remove console log in production mode
+if(process.env.NODE_ENV == "production")
+{
+    console.log = function(){}; 
+}
+
 /* Db setup
  */
 function connect_cb( err, client) {
@@ -65,29 +72,24 @@ function incr_key(key_string) {
         client.incr(key_string);
     }
 }
+var output;
 
-var keygetter = {
-    output: null,
-    get_key: function(key_string, callback) {
-        var that = this;
-        var output;
+function get_key(key_string,callback) {
         if (db === "aerospike") {
             client.select(MAIN_KEY, [key_string], function(err, rec, meta, key){
                 if (err.code == aerostatus.AEROSPIKE_OK) {
                     console.log("Found record")
-                    that.output = rec[key_string];
+                    output = rec[key_string];
                 } else {
                     console.log(err);
                 }
             });
         } else if (db === "redis") {
-            client.get(key_string, function(err, reply) {
-                that.output = reply;
-            });
+          client.get(key_string, function(err, reply) {
+          })
         }
-        return that.output;
     }
-}
+
 
 //function return_keys(key_strings, res, callback) {
 //    /* Takes a list of key strings and express-sends back the k/v pairs
@@ -185,35 +187,48 @@ app.get('/', function (req, res) {
 
 })
 
-function simple() {
+/*function simple() {
     return "a";
-}
+}*/
 
 app.get('/stats', function (req, res) {
-    //ret_obj = {};
-    //ret_obj[NUM_FRAUD] = get_key(NUM_FRAUD);
-    //ret_obj[NUM_NON_FRAUD] = get_key(NUM_NON_FRAUD);
-    //ret_obj[NUM_REQUESTS] = get_key(NUM_REQUESTS);
-    //console.log(ret_obj);
-    async.series([
+  
+  if (db === "redis"){
+        ret_obj = {};
+    client.get(NUM_FRAUD, function(err,data){
+        ret_obj[NUM_FRAUD] = data
+        client.get(NUM_NON_FRAUD, function(err,data){
+          ret_obj[NUM_NON_FRAUD] = data
+          client.get(NUM_REQUESTS, function(err,data){
+            ret_obj[NUM_REQUESTS] = data
+            console.log(ret_obj)
+            res.status(200).send(ret_obj)
+          })
+        })       
+    });
+  }  
+
+
+    /*async.series([
         function(cb) { 
-            num_fraud = keygetter.get_key(NUM_FRAUD);
+            num_fraud = get_key(NUM_FRAUD);
             console.log(num_fraud);
             cb(null, num_fraud);
         },
         function(cb) { 
-            num_non_fraud = keygetter.get_key(NUM_NON_FRAUD)
+            num_non_fraud = get_key(NUM_NON_FRAUD)
             console.log(num_non_fraud);
             cb(null, num_non_fraud);
         },
         function(cb) { 
-            num_requests = keygetter.get_key(NUM_REQUESTS)
+            num_requests = get_key(NUM_REQUESTS)
             console.log(num_non_fraud);
             cb(null, num_requests);
         }
     ], function(err, results) {
         console.log(results);
-    });
+    });*/
+  //get_key(NUM_REQUESTS,set_data)
 })
 
 
