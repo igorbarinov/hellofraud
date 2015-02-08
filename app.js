@@ -28,7 +28,7 @@ var fs = require('fs')
   // DEBUG console 
   // console.log(obj.length)
 
-  for (var i=0; i < obj.length/2; ++i){
+  for (var i=0; i < obj.length; ++i){
     classifier.addDocument([obj[i][0],obj[i][1],obj[i][2]],obj[i][3])
   }
   classifier.train()
