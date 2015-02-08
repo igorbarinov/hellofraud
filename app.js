@@ -201,7 +201,7 @@ fs.readFile('train_data_browser.tsv', 'utf8', function (err,data) {
 console.log('[OK]'.green + " train complete.");
 // End training set
 
-var tkz_space = new natural.RegexpTokenizer({pattern: /%2F/});
+var tkz_space = new natural.RegexpTokenizer({pattern: / /});
 function get_browser(user_agent) {
     /* Parser that extracts and returns the browser in the user agent
      */
@@ -250,13 +250,13 @@ app.get('/', function(req, res) {
         if (classify == "true") {
             incr_key(NUM_NON_FRAUD);
             console.log('[RESULT]'.green + ' of IP: ' + req.query.ip + ' is not bot')
-            console.log(clsf.getClassifications([req.query.ip, req.query.user_agent,'']))
+            console.log(clsf.getClassifications([req.query.ip, get_browser(req.query.user_agent),'']))
             res.status(204).send('Not Fraud')
         } else {
             incr_key(NUM_FRAUD);
             res.status(403).send('Fraud')
             console.log('[RESULT]'.green + ' is bot')
-            console.log(clsf.getClassifications([req.query.ip, req.query.user_agent,'']))
+            console.log(clsf.getClassifications([req.query.ip, get_browser(req.query.user_agent),'']))
         }
 
 
