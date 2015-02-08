@@ -29,57 +29,56 @@ var fs = require('fs')
   // console.log(obj.length)
 
   for (var i=0; i < obj.length/2; ++i){
-  	classifier.addDocument([obj[i][0],obj[i][1],obj[i][2]],obj[i][3])
+    classifier.addDocument([obj[i][0],obj[i][1],obj[i][2]],obj[i][3])
   }
   classifier.train()
   console.log('[OK]'.green + " train complete.")
   /* debug for train complete
   for (var i=0; i< obj.length; ++i){
-  	  
-  	  console.log(obj[i][3] + ' ' + classifier.classify([obj[i][0],obj[i][1],obj[i][2]]));
+      
+      console.log(obj[i][3] + ' ' + classifier.classify([obj[i][0],obj[i][1],obj[i][2]]));
   } */
 
-
+var stat = {
+  num_requests: 0,
+  num_fraud: 0,
+  num_non_fraud: 0,
+}
 
 
 app.get('/', function (req, res) {
  
-  console.log('[QUERY]'.green+ ' ' + JSON.stringify(req.query))
-
- 
- // classifier.addDocument([obj[0][0],obj[0][1],obj[0][2]],obj[0][3])
-
-
+  console.log('[QUERY]'.green+ ' ' + JSON.stringify(req.query));
+  stat.num_requests += 1;
   if (req.query.ip && req.query.user_agent && req.query.referer)
   {
-  	console.log('[OK]'.green + ' all parameters are set for a query. Evaluating.')
-  	var classify =  classifier.classify([req.query.ip,req.query.user_agent, req.query.referer])
-  	
-  	//console.log(classify)
+    console.log('[OK]'.green + ' all parameters are set for a query. Evaluating.')
+    var classify =  classifier.classify([req.query.ip,req.query.user_agent, req.query.referer])
+    
+    //console.log(classify)
 
-  	if (classify == "true") {
-  		console.log('[RESULT]'.green+ ' of IP: ' + req.query.ip +  ' is not bot')
-  		console.log(classifier.getClassifications([req.query.ip,req.query.user_agent, req.query.referer]))
-  		res.status(200).send('Not Fraud')
-  	}
-  	else {
-  		console.log('im in else')
-  		res.status(403).send('Fraud')
-  		console.log('[RESULT]'.green+ ' is bot')
-  	} 
+    if (classify == "true") {
+      stat.num_non_fraud += 1;
+      console.log('[RESULT]'.green+ ' of IP: ' + req.query.ip +  ' is not bot')
+      console.log(classifier.getClassifications([req.query.ip,req.query.user_agent, req.query.referer]))
+      res.status(200).send('Not Fraud')
+    }
+    else {
+      num_fraud += 1;
+      res.status(403).send('Fraud')
+      console.log('[RESULT]'.green+ ' is bot')
+    }
 
-  } 
+  }
   else {
-  	res.status(200).send('Please specify params')
+    res.status(200).send('Please specify params')
   }
 
 })
 
 app.get('/stats', function (req, res) {
-	//TODO show stats for session
+  //TODO show stats for session
 })
-
-
 
 
 var server = app.listen(3000, function () {
