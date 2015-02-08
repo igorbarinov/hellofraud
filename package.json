@@ -15,5 +15,12 @@
   "bugs": {
     "url": "https://github.com/igorbarinov/hellofraud/issues"
   },
-  "homepage": "https://github.com/igorbarinov/hellofraud"
+  "homepage": "https://github.com/igorbarinov/hellofraud",
+  "dependencies": {
+    "colors": "^1.0.3",
+    "express": "^4.11.2",
+    "natural": "^0.2.0",
+    "node-tsv-json": "^0.2.1",
+    "redis": "^0.12.1"
+  }
 }
