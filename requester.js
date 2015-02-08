@@ -58,4 +58,5 @@ function file_to_requests(host, filename) {
     });
 }
 
-file_to_requests("localhost", "../min_data.tsv")
+var inputfile = process.argv[2] || "train_data.tsv";
+file_to_requests("localhost", inputfile);
