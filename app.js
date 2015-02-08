@@ -64,7 +64,7 @@ app.get('/', function (req, res) {
       res.status(200).send('Not Fraud')
     }
     else {
-      num_fraud += 1;
+      stat.num_fraud += 1;
       res.status(403).send('Fraud')
       console.log('[RESULT]'.green+ ' is bot')
     }
