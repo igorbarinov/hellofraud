@@ -146,27 +146,21 @@ app.get('/', function(req, res) {
 
     console.log('[QUERY]'.green + ' ' + JSON.stringify(req.query));
     incr_key(NUM_REQUESTS);
-    if (req.query.ip && req.query.user_agent && req.query.referer) {
-        console.log('[OK]'.green + ' all parameters are set for a query. Evaluating.')
-        var classify = classifier.classify([req.query.ip, req.query.user_agent, req.query.referer])
+    ip = req.query.ip || "";
+    user_agent = req.query.user_agent || "";
+    referer = req.query.referer || "";
+    var classify = classifier.classify([ip, user_agent, referer]);
 
-        //console.log(classify)
-
-        if (classify == "true") {
-            incr_key(NUM_NON_FRAUD);
-            console.log('[RESULT]'.green + ' of IP: ' + req.query.ip + ' is not bot')
-            console.log(classifier.getClassifications([req.query.ip, req.query.user_agent, req.query.referer]))
-            res.status(204).send('Not Fraud')
-        } else {
-            incr_key(NUM_FRAUD);
-            res.status(403).send('Fraud')
-            console.log('[RESULT]'.green + ' is bot')
-        }
-
+    if (classify == "true") {
+        incr_key(NUM_NON_FRAUD);
+        console.log('[RESULT]'.green + ' of IP: ' + ip + ' is classified as not bot')
+        console.log(classifier.getClassifications([ip, user_agent, referer]))
+        res.status(204).send('Not Fraud')
     } else {
-        res.status(200).send('Please specify params')
+        incr_key(NUM_FRAUD);
+        res.status(403).send('Fraud')
+        console.log('[RESULT]'.green + ' is classified as bot')
     }
-
 })
 
 app.get('/stats', function(req, res) {
