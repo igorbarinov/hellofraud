@@ -1,7 +1,6 @@
 var express = require('express');
 var colors = require('colors');
-var natural = require('natural'),
-    classifier = new natural.BayesClassifier()
+var natural = require('natural');
 var fs = require('fs')
 var app = express();
 
@@ -16,6 +15,7 @@ var db = "redis";
 var DEBUG = true;
 if (DEBUG) {
   fs.writeFileSync('incomplete.tsv','')
+  fs.writeFileSync('complete.tsv','')
 }
 
 /* Db setup
@@ -117,46 +117,113 @@ set_key(NUM_FRAUD, 0);
 set_key(NUM_NON_FRAUD, 0);
 
 
-var tsv = require("node-tsv-json")
-tsv({
-    input: "train_data.tsv",
-    output: "output.json",
-    parseRows: true
-}, function(err, result) {
-    if (err) {
-        console.error(err);
-    } else {
 
+/* Classifier is trained here
+ */
+
+var success_rate = function(inarray, clsf, feat_inds) {
+    total = 0, false_positive = 0, false_negative = 0, true_positive = 0;
+    true_negative = 0;
+    for (var i=0;i<inarray.length;i++) {
+        total += 1;
+        featset = [];
+        for (var j=0; j<feat_inds.length; j++) {
+            featset.push(inarray[i][feat_inds[j]]);
+        }
+        predicted = clsf.classify(featset);
+        actual = inarray[i].slice(-1)[0]
+        if (actual === "true") {
+            if (predicted === "true") {
+                true_positive += 1;
+            } else {
+                false_negative += 1;
+            }
+        } else {
+            if (predicted === "true") {
+                false_positive += 1;
+            } else {
+                true_negative += 1;
+            }
+        }
     }
+    output = {
+        true_positive: true_positive,
+        true_negative: true_negative,
+        false_positive: false_positive,
+        false_negative: false_negative,
+        accuracy: (true_positive + true_negative) / total
+    }
+    return output
+}
+
+
+var clsf = new natural.BayesClassifier();
+
+// Indices of features used; here, the IP, browser of UA, and referer
+var inds = [0, 1, 3];
+
+function to_train_set(ind) {
+    return true;
+}
+
+var testset = []
+fs.readFile('train_data_browser.tsv', 'utf8', function (err,data) {
+    if (err) {
+        return console.log(err);
+    }
+    var fileLines = data.toString().split("\n");
+    //console.log(fileLines);
+    for (var i=0;i<fileLines.length;i++) {
+        var featset = [];  // array of features acutally used
+        if (fileLines[i].length===0) { continue;}
+        parsed_line = fileLines[i].split('\t');
+        for (var j=0; j<inds.length; j++) {
+            featset.push(parsed_line[inds[j]]);
+        }
+        length = parsed_line.length;
+        if (to_train_set(i)) {
+            clsf.addDocument(
+                featset,
+                parsed_line[length-1]
+            );
+        } else {
+            testset.push(parsed_line)
+        }
+    }
+    clsf.train();
+    //results = success_rate(
+    //    testset,
+    //    clsf,
+    //    inds
+    //);
+    //console.log(results);
 });
 
-var obj = JSON.parse(fs.readFileSync('output.json', 'utf8'))
+console.log('[OK]'.green + " train complete.");
+// End training set
 
-for (var i = 0; i < obj.length; ++i) {
-    classifier.addDocument([obj[i][0], obj[i][1], obj[i][2]], obj[i][3])
+var tkz_space = new natural.RegexpTokenizer({pattern: / /});
+function get_browser(user_agent) {
+    /* Parser that extracts and returns the browser in the user agent
+     */
+    return tkz_space.tokenize(user_agent)[0];
 }
-classifier.train()
-console.log('[OK]'.green + " train complete.")
-    /* debug for train complete
-    for (var i=0; i< obj.length; ++i){
-        
-        console.log(obj[i][3] + ' ' + classifier.classify([obj[i][0],obj[i][1],obj[i][2]]));
-    } */
 
 app.get('/', function(req, res) {
-
-
-
+if (DEBUG) {
+// dump all requests
+fs.appendFile('complete.tsv',req.query.ip+'\t'+req.query.user_agent+'\t'+req.query.referer+'\n', function (err) { if (err) throw err;})
+}
     console.log('[QUERY]'.green + ' ' + JSON.stringify(req.query));
     incr_key(NUM_REQUESTS);
     if (req.query.ip && req.query.user_agent && req.query.referer) {
         console.log('[OK]'.green + ' all parameters are set for a query. Evaluating.')
-        var classify = classifier.classify([req.query.ip, req.query.user_agent, req.query.referer])
+        var classify = clsf.classify([req.query.ip, get_browser(req.query.user_agent), req.query.referer])
 
         if (classify == "true") {
             incr_key(NUM_NON_FRAUD);
             console.log('[RESULT]'.green + ' of IP: ' + req.query.ip + ' is not bot')
-            console.log(classifier.getClassifications([req.query.ip, req.query.user_agent, req.query.referer]))
+            console.log(clsf.getClassifications([req.query.ip, get_browser(req.query.user_agent), req.query.referer]))
             res.status(204).send('Not Fraud')
         } else {
             incr_key(NUM_FRAUD);
@@ -172,41 +239,33 @@ app.get('/', function(req, res) {
           console.log(req.query.ip+'\t'+req.query.user_agent+'\t'+req.query.referer+'\n')
         })        
       }
-        incr_key(NUM_FRAUD);
-        res.status(403).send('Incomplete request. You must specify ip, user_agent and referer in your request. Bye.')
+      incr_key(NUM_FRAUD);
+      res.status(403).send('Incomplete request. You must specify ip, user_agent and referer in your request. Bye.')
+      console.log('[RESULT]'.green + ' is bot')
     }
    
 
-
-
-
     else if (req.query.ip && req.query.user_agent && !req.query.referer) {
       
-      var classify = classifier.classify([req.query.ip, req.query.user_agent,''])
+      var classify = clsf.classify([req.query.ip, get_browser(req.query.user_agent) ,''])
         console.log('[OK]'.green + ' ip and user_agent parameters are set for a query. Evaluating.')
         
 
         if (classify == "true") {
             incr_key(NUM_NON_FRAUD);
             console.log('[RESULT]'.green + ' of IP: ' + req.query.ip + ' is not bot')
-            console.log(classifier.getClassifications([req.query.ip, req.query.user_agent,'']))
+            console.log(clsf.getClassifications([req.query.ip, get_browser(req.query.user_agent),'']))
             res.status(204).send('Not Fraud')
         } else {
             incr_key(NUM_FRAUD);
             res.status(403).send('Fraud')
             console.log('[RESULT]'.green + ' is bot')
-            console.log(classifier.getClassifications([req.query.ip, req.query.user_agent,'']))
+            console.log(clsf.getClassifications([req.query.ip, get_browser(req.query.user_agent),'']))
         }
 
 
     }
-
-
-
-
-
-
-})
+});
 
 app.get('/stats', function(req, res) {
 
@@ -224,7 +283,7 @@ app.get('/stats', function(req, res) {
             })
         });
     }
-})
+});
 
 
 var server = app.listen(3000, function() {
